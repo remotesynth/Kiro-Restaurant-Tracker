@@ -1,0 +1,183 @@
+name: Backend Deployment
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'restaurant-tracker/backend/**'
+      - '.github/workflows/backend-deploy.yml'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'restaurant-tracker/backend/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+
+jobs:
+  test:
+    name: Test Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: restaurant-tracker/backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: restaurant-tracker/backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+  build:
+    name: Build Backend
+    needs: test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: restaurant-tracker/backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: restaurant-tracker/backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build TypeScript
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: backend-build
+          path: |
+            restaurant-tracker/backend/lib
+            restaurant-tracker/backend/bin
+            restaurant-tracker/backend/cdk.json
+            restaurant-tracker/backend/package.json
+            restaurant-tracker/backend/package-lock.json
+            restaurant-tracker/backend/tsconfig.json
+            restaurant-tracker/backend/node_modules
+
+  deploy-dev:
+    name: Deploy to Development
+    needs: build
+    if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev')
+    runs-on: ubuntu-latest
+    environment: development
+    defaults:
+      run:
+        working-directory: restaurant-tracker/backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: backend-build
+          path: restaurant-tracker/backend
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to AWS
+        run: npm run deploy:dev
+
+      - name: Save deployment outputs
+        id: deployment
+        run: |
+          echo "API_URL=$(aws cloudformation describe-stacks --stack-name RestaurantTrackerStack-dev --query 'Stacks[0].Outputs[?ExportName==`restaurant-tracker-dev-api-url`].OutputValue' --output text)" >> $GITHUB_OUTPUT
+          echo "USER_POOL_ID=$(aws cloudformation describe-stacks --stack-name RestaurantTrackerStack-dev --query 'Stacks[0].Outputs[?ExportName==`restaurant-tracker-dev-user-pool-id`].OutputValue' --output text)" >> $GITHUB_OUTPUT
+          echo "USER_POOL_CLIENT_ID=$(aws cloudformation describe-stacks --stack-name RestaurantTrackerStack-dev --query 'Stacks[0].Outputs[?ExportName==`restaurant-tracker-dev-user-pool-client-id`].OutputValue' --output text)" >> $GITHUB_OUTPUT
+
+      - name: Comment on PR with deployment info
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { issue, repo } = context;
+            github.rest.issues.createComment({
+              issue_number: issue.number,
+              owner: repo.owner,
+              repo: repo.repo,
+              body: `✅ Backend deployed to development environment!\n\nAPI URL: ${process.env.API_URL}\nUser Pool ID: ${process.env.USER_POOL_ID}\nUser Pool Client ID: ${process.env.USER_POOL_CLIENT_ID}`
+            });
+        env:
+          API_URL: ${{ steps.deployment.outputs.API_URL }}
+          USER_POOL_ID: ${{ steps.deployment.outputs.USER_POOL_ID }}
+          USER_POOL_CLIENT_ID: ${{ steps.deployment.outputs.USER_POOL_CLIENT_ID }}
+
+  deploy-prod:
+    name: Deploy to Production
+    needs: build
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod')
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: restaurant-tracker/backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: backend-build
+          path: restaurant-tracker/backend
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to AWS
+        run: npm run deploy:prod

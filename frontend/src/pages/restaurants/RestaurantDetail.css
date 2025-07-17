@@ -1,0 +1,214 @@
+.restaurant-detail-page {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem 0;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.header-content h1 {
+  margin: 0 0 1rem 0;
+  color: #2c3e50;
+}
+
+.restaurant-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.meta-item {
+  font-size: 0.95rem;
+  color: #555;
+}
+
+.meta-label {
+  font-weight: bold;
+  margin-right: 0.25rem;
+}
+
+.status {
+  font-size: 0.8rem;
+  font-weight: bold;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.status.visited {
+  background-color: #2ecc71;
+  color: white;
+}
+
+.status.not-visited {
+  background-color: #3498db;
+  color: white;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.edit-button,
+.back-button,
+.add-review-button {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-weight: bold;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.edit-button {
+  background-color: #3498db;
+  color: white;
+  border: none;
+}
+
+.edit-button:hover {
+  background-color: #2980b9;
+}
+
+.back-button {
+  background-color: #f8f9fa;
+  color: #6c757d;
+  border: 1px solid #ced4da;
+}
+
+.back-button:hover {
+  background-color: #e9ecef;
+}
+
+.detail-section {
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.description-section p {
+  line-height: 1.6;
+  color: #555;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.section-header h2 {
+  margin: 0;
+  color: #2c3e50;
+}
+
+.section-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.add-review-button,
+.mark-visited-button {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-weight: bold;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  font-size: 0.9rem;
+  border: none;
+}
+
+.add-review-button {
+  background-color: #2ecc71;
+  color: white;
+}
+
+.add-review-button:hover {
+  background-color: #27ae60;
+}
+
+.mark-visited-button {
+  background-color: #3498db;
+  color: white;
+}
+
+.mark-visited-button:hover {
+  background-color: #2980b9;
+}
+
+.no-reviews,
+.not-visited-message {
+  color: #7f8c8d;
+  font-style: italic;
+  margin: 1rem 0;
+}
+
+.reviews-list {
+  margin-top: 1.5rem;
+}
+
+.review-item {
+  background-color: #f8f9fa;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.review-text {
+  line-height: 1.5;
+  margin-bottom: 0.5rem;
+}
+
+.review-date {
+  font-size: 0.8rem;
+  color: #6c757d;
+  text-align: right;
+}
+
+.star-rating {
+  display: inline-flex;
+  margin-left: 0.5rem;
+}
+
+.star {
+  color: #bbb;
+  font-size: 1.2rem;
+  margin-right: 2px;
+}
+
+.star.filled {
+  color: #f39c12;
+}
+
+.no-rating {
+  color: #95a5a6;
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  .detail-header {
+    flex-direction: column;
+  }
+  
+  .header-actions {
+    margin-top: 1rem;
+  }
+  
+  .restaurant-meta {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+}

@@ -1,0 +1,171 @@
+name: Frontend Deployment
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'restaurant-tracker/frontend/**'
+      - '.github/workflows/frontend-deploy.yml'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'restaurant-tracker/frontend/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+
+jobs:
+  test:
+    name: Test Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: restaurant-tracker/frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: restaurant-tracker/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test -- --watchAll=false
+
+  build:
+    name: Build Frontend
+    needs: test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: restaurant-tracker/frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: restaurant-tracker/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Get backend outputs for dev
+        if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev')
+        run: |
+          echo "REACT_APP_API_URL=${{ secrets.DEV_API_URL }}" >> .env
+          echo "REACT_APP_USER_POOL_ID=${{ secrets.DEV_USER_POOL_ID }}" >> .env
+          echo "REACT_APP_USER_POOL_CLIENT_ID=${{ secrets.DEV_USER_POOL_CLIENT_ID }}" >> .env
+          echo "REACT_APP_STAGE=dev" >> .env
+
+      - name: Get backend outputs for prod
+        if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod')
+        run: |
+          echo "REACT_APP_API_URL=${{ secrets.PROD_API_URL }}" >> .env
+          echo "REACT_APP_USER_POOL_ID=${{ secrets.PROD_USER_POOL_ID }}" >> .env
+          echo "REACT_APP_USER_POOL_CLIENT_ID=${{ secrets.PROD_USER_POOL_CLIENT_ID }}" >> .env
+          echo "REACT_APP_STAGE=prod" >> .env
+
+      - name: Build React app
+        run: npm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: frontend-build
+          path: restaurant-tracker/frontend/build
+
+  deploy-dev:
+    name: Deploy to Development
+    needs: build
+    if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev')
+    runs-on: ubuntu-latest
+    environment: development
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: frontend-build
+          path: ./build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync ./build s3://${{ secrets.DEV_WEBSITE_BUCKET_NAME }} --delete
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ secrets.DEV_CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*"
+
+      - name: Comment on PR with deployment info
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { issue, repo } = context;
+            github.rest.issues.createComment({
+              issue_number: issue.number,
+              owner: repo.owner,
+              repo: repo.repo,
+              body: `✅ Frontend deployed to development environment!\n\nWebsite URL: https://${process.env.CLOUDFRONT_DOMAIN}`
+            });
+        env:
+          CLOUDFRONT_DOMAIN: ${{ secrets.DEV_CLOUDFRONT_DOMAIN }}
+
+  deploy-prod:
+    name: Deploy to Production
+    needs: build
+    if: github.ref == 'refs/heads/main' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod')
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: frontend-build
+          path: ./build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync ./build s3://${{ secrets.PROD_WEBSITE_BUCKET_NAME }} --delete
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ secrets.PROD_CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*"

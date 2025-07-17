@@ -1,0 +1,134 @@
+name: Pull Request Checks
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Lint Backend
+        working-directory: restaurant-tracker/backend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Lint Frontend
+        working-directory: restaurant-tracker/frontend
+        run: |
+          npm ci
+          npm run build
+
+  test-backend:
+    name: Test Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: restaurant-tracker/backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: restaurant-tracker/backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+  test-frontend:
+    name: Test Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: restaurant-tracker/frontend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: restaurant-tracker/frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test -- --watchAll=false
+
+  cdk-diff:
+    name: CDK Diff
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: restaurant-tracker/backend
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: restaurant-tracker/backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: CDK Diff (Dev)
+        run: npx cdk diff RestaurantTrackerStack-dev || true
+
+      - name: Generate CDK Diff Report
+        run: |
+          npx cdk diff RestaurantTrackerStack-dev > diff-report.txt || true
+          echo "## CDK Diff Report" > diff-summary.md
+          echo '```' >> diff-summary.md
+          cat diff-report.txt >> diff-summary.md
+          echo '```' >> diff-summary.md
+
+      - name: Comment on PR with CDK diff
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const diffSummary = fs.readFileSync('restaurant-tracker/backend/diff-summary.md', 'utf8');
+            const { issue, repo } = context;
+            github.rest.issues.createComment({
+              issue_number: issue.number,
+              owner: repo.owner,
+              repo: repo.repo,
+              body: diffSummary
+            });
